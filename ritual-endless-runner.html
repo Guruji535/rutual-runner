@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Ritual // Sentinel Run</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+
+  :root{
+    --bg-0:#080a14;
+    --bg-1:#10132a;
+    --panel:#141833;
+    --line: rgba(139,124,255,0.20);
+    --violet:#8b7cff;
+    --violet-dim:#5d51a8;
+    --cyan:#3ef2c4;
+    --gold:#f0b90b;
+    --red:#ff4d6d;
+    --text:#e9e9f5;
+    --text-dim:#9a9bc0;
+  }
+
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout:none;}
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:var(--bg-0);
+    font-family:'IBM Plex Mono', monospace;
+    color:var(--text);
+    user-select:none; touch-action:none;
+  }
+
+  #wrap{
+    position:relative; width:100%; height:100vh;
+    max-width:520px; margin:0 auto;
+    display:flex; flex-direction:column;
+    border-left:1px solid var(--line); border-right:1px solid var(--line);
+  }
+
+  #titlebar{ text-align:center; padding:10px 0 4px; z-index:5; }
+  #titlebar h1{
+    font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:14px;
+    letter-spacing:.12em; margin:0; color:var(--text);
+  }
+  #titlebar h1 span{ color:var(--violet); }
+  #titlebar p{ margin:2px 0 0; font-size:9px; color:var(--text-dim); letter-spacing:.08em; }
+
+  #hud{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:4px 16px 8px; z-index:5;
+  }
+  .hud-block{ display:flex; flex-direction:column; gap:1px; }
+  .hud-block.right{ align-items:flex-end; }
+  .hud-label{ font-size:9px; letter-spacing:.14em; color:var(--text-dim); text-transform:uppercase; }
+  .hud-value{ font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:17px; }
+  #tokenValue{ color:var(--gold); }
+  #distValue{ color:var(--cyan); }
+
+  #stage{ position:relative; flex:1; overflow:hidden; }
+  canvas#game{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+  .overlay{
+    position:absolute; inset:0; z-index:10;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:rgba(8,10,20,0.93);
+    text-align:center; padding:26px;
+  }
+  .overlay h2{ font-family:'Space Grotesk',sans-serif; font-size:23px; margin:0 0 6px; letter-spacing:.03em; }
+  .eyebrow{ font-size:10px; letter-spacing:.2em; color:var(--violet); text-transform:uppercase; margin-bottom:10px; }
+  .overlay p{ color:var(--text-dim); font-size:12px; line-height:1.6; max-width:300px; margin:0 0 20px; }
+  .btn{
+    font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:14px;
+    background:var(--violet); color:#0a0c18; border:none; padding:14px 34px;
+    border-radius:10px; cursor:pointer; letter-spacing:.03em;
+    box-shadow:0 0 24px rgba(139,124,255,0.45);
+  }
+  .btn:active{ transform:scale(0.96); }
+  .legend{ display:flex; gap:22px; margin-bottom:20px; }
+  .legend div{ font-size:10px; color:var(--text-dim); display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .legend .ic{ font-size:22px; }
+  .statline{ display:flex; gap:26px; margin-bottom:18px; }
+  .statline .s{ text-align:center; }
+  .statline .s b{ display:block; font-family:'Space Grotesk',sans-serif; font-size:22px; color:var(--gold); }
+  .statline .s i{ font-style:normal; font-size:9px; color:var(--text-dim); letter-spacing:.1em; }
+  #best-tag{ color:var(--cyan); }
+  .hidden{ display:none !important; }
+
+  #touchHint{
+    position:absolute; bottom:14px; left:0; right:0; text-align:center;
+    font-size:9.5px; letter-spacing:.1em; color:var(--text-dim); z-index:4;
+    pointer-events:none; opacity:.85;
+  }
+  #ctrlBtns{
+    position:absolute; bottom:0; left:0; right:0; display:flex; z-index:6;
+    height:34%;
+  }
+  .ctrlZone{ flex:1; display:flex; align-items:flex-end; justify-content:center; padding-bottom:10px; opacity:0; }
+</style>
+</head>
+<body>
+<div id="wrap">
+
+  <div id="titlebar">
+    <h1>RITUAL <span>//</span> SENTINEL RUN</h1>
+    <p>OUTRUN CENTRALIZATION. STAY ON THE CHAIN.</p>
+  </div>
+
+  <div id="hud">
+    <div class="hud-block">
+      <span class="hud-label">$RITUAL</span>
+      <span class="hud-value" id="tokenValue">0</span>
+    </div>
+    <div class="hud-block right">
+      <span class="hud-label">Distance</span>
+      <span class="hud-value" id="distValue">0m</span>
+    </div>
+  </div>
+
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <div id="touchHint" class="hidden">TAP TO JUMP · SWIPE DOWN TO SLIDE</div>
+    <div id="ctrlBtns">
+      <div class="ctrlZone" data-act="slide"></div>
+      <div class="ctrlZone" data-act="jump"></div>
+    </div>
+
+    <div class="overlay" id="startOverlay">
+      <div class="eyebrow">Ritual Network</div>
+      <h2>Run The Infernet</h2>
+      <p>You're a Sentinel node sprinting across the Ritual chain. Jump server walls, slide under firewalls, and grab $RITUAL along the way. Hit a Guardian shield for a few seconds of safe passage.</p>
+      <div class="legend">
+        <div><span class="ic">🟪</span>Jump: tap</div>
+        <div><span class="ic">🟦</span>Slide: swipe down</div>
+        <div><span class="ic">🛡️</span>Shield: grab it</div>
+      </div>
+      <div class="statline">
+        <div class="s"><b id="startBest">0</b><i>BEST DISTANCE</i></div>
+      </div>
+      <button class="btn" id="startBtn">Launch Sentinel</button>
+    </div>
+
+    <div class="overlay hidden" id="overOverlay">
+      <div class="eyebrow" style="color:var(--red);">Node Disconnected</div>
+      <h2>Run Terminated</h2>
+      <div class="statline">
+        <div class="s"><b id="finalDist">0</b><i>DISTANCE</i></div>
+        <div class="s"><b id="finalTokens">0</b><i>$RITUAL</i></div>
+        <div class="s"><b id="best">0</b><i>BEST</i></div>
+      </div>
+      <p id="newBestMsg" class="hidden" style="color:var(--cyan);">New best distance — the chain remembers this run.</p>
+      <button class="btn" id="restartBtn">Redeploy Sentinel</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const stage = document.getElementById('stage');
+  const tokenValueEl = document.getElementById('tokenValue');
+  const distValueEl = document.getElementById('distValue');
+  const startOverlay = document.getElementById('startOverlay');
+  const overOverlay = document.getElementById('overOverlay');
+  const startBtn = document.getElementById('startBtn');
+  const restartBtn = document.getElementById('restartBtn');
+  const touchHint = document.getElementById('touchHint');
+
+  let W,H,DPR;
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio||1, 2);
+    W = stage.clientWidth; H = stage.clientHeight;
+    canvas.width = W*DPR; canvas.height = H*DPR;
+    canvas.style.width = W+'px'; canvas.style.height = H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    groundY = H*0.78;
+  }
+  window.addEventListener('resize', resize);
+
+  let groundY;
+  const GRAVITY = 0.0026;
+  const JUMP_V = -0.95;
+  const BASE_RUN_H = 46, SLIDE_RUN_H = 26;
+
+  // ---- game state ----
+  let running=false, distance=0, tokens=0, best=0, speed, elapsed;
+  let player, obstacles, coins, shields, particles;
+  let bgLayers;
+  let shieldTimer = 0;
+
+  function resetState(){
+    distance=0; tokens=0; elapsed=0; speed=0.34;
+    player = { x: W*0.18, y: groundY-BASE_RUN_H, vy:0, w:34, h:BASE_RUN_H, sliding:false, slideT:0, onGround:true, bob:0 };
+    obstacles = [];
+    coins = [];
+    shields = [];
+    particles = [];
+    shieldTimer = 0;
+    spawnTimerObs = 900;
+    spawnTimerCoin = 500;
+    spawnTimerShield = 9000 + Math.random()*6000;
+  }
+
+  let spawnTimerObs, spawnTimerCoin, spawnTimerShield;
+
+  function jump(){
+    if(!running) return;
+    if(player.onGround && !player.sliding){
+      player.vy = JUMP_V;
+      player.onGround = false;
+    }
+  }
+  function slide(){
+    if(!running) return;
+    if(player.onGround){
+      player.sliding = true;
+      player.slideT = 480;
+    }
+  }
+
+  // ---- input ----
+  let touchStartY=null, touchStartT=0;
+  stage.addEventListener('touchstart', (e)=>{
+    touchStartY = e.touches[0].clientY;
+    touchStartT = Date.now();
+  }, {passive:true});
+  stage.addEventListener('touchend', (e)=>{
+    if(touchStartY==null) return;
+    const dy = (e.changedTouches[0].clientY - touchStartY);
+    const dt = Date.now()-touchStartT;
+    if(dy > 40 && dt < 500){ slide(); } else { jump(); }
+    touchStartY=null;
+  }, {passive:true});
+  stage.addEventListener('mousedown', (e)=>{
+    if(e.target.closest('.overlay')) return;
+    jump();
+  });
+  window.addEventListener('keydown', (e)=>{
+    if(e.code==='Space' || e.key==='ArrowUp'){ jump(); }
+    if(e.key==='ArrowDown'){ slide(); }
+  });
+
+  function isMobile(){ return 'ontouchstart' in window || navigator.maxTouchPoints>0; }
+
+  // ---- spawning ----
+  function spawnObstacle(){
+    const type = Math.random() < 0.5 ? 'server' : 'firewall';
+    if(type==='server'){
+      const h = 44 + Math.random()*30;
+      obstacles.push({ type, x:W+40, y:groundY-h, w:30, h });
+    } else {
+      const gap = 30; // gap under beam for slide
+      obstacles.push({ type, x:W+40, y:groundY-BASE_RUN_H-14, w:44, h:22 });
+    }
+  }
+  function spawnCoin(){
+    const high = Math.random()<0.4;
+    const y = high ? groundY-100-Math.random()*20 : groundY-40-Math.random()*10;
+    coins.push({ x:W+40, y, r:9, taken:false });
+  }
+  function spawnShield(){
+    shields.push({ x:W+40, y:groundY-60, r:13, taken:false });
+  }
+
+  function rectsOverlap(a,b){
+    return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+  }
+
+  // ---- background parallax ----
+  function initBg(){
+    bgLayers = {
+      dots: Array.from({length:40}, ()=>({ x:Math.random()*W, y:Math.random()*H*0.6, r:Math.random()*1.6+0.4 })),
+      blocks: Array.from({length:10}, (_,i)=>({ x:i*140, w:60+Math.random()*40, h:40+Math.random()*90 }))
+    };
+  }
+
+  function drawBg(dt){
+    ctx.clearRect(0,0,W,H);
+    // sky gradient
+    const grad = ctx.createLinearGradient(0,0,0,H);
+    grad.addColorStop(0,'#151a3a'); grad.addColorStop(1,'#080a14');
+    ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+
+    // dots (slow parallax)
+    ctx.fillStyle = 'rgba(139,124,255,0.35)';
+    bgLayers.dots.forEach(d=>{
+      d.x -= speed*dt*0.25;
+      if(d.x<-5) d.x = W+5;
+      ctx.beginPath(); ctx.arc(d.x,d.y,d.r,0,7); ctx.fill();
+    });
+
+    // skyline blocks (mid parallax) representing network nodes
+    ctx.fillStyle = 'rgba(93,81,168,0.28)';
+    bgLayers.blocks.forEach(b=>{
+      b.x -= speed*dt*0.55;
+      if(b.x < -b.w){ b.x = W + Math.random()*80; b.w = 60+Math.random()*40; b.h = 40+Math.random()*90; }
+      ctx.fillRect(b.x, groundY-b.h, b.w, b.h);
+    });
+
+    // ground line
+    ctx.strokeStyle = 'rgba(139,124,255,0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0,groundY); ctx.lineTo(W,groundY); ctx.stroke();
+
+    // ground ticks scrolling
+    ctx.strokeStyle = 'rgba(139,124,255,0.25)';
+    ctx.lineWidth = 1;
+    const tickSpace = 40;
+    groundTick = (groundTick||0) - speed*dt;
+    if(groundTick < -tickSpace) groundTick += tickSpace;
+    for(let x=groundTick; x<W; x+=tickSpace){
+      ctx.beginPath(); ctx.moveTo(x,groundY+4); ctx.lineTo(x-14,groundY+16); ctx.stroke();
+    }
+  }
+  let groundTick;
+
+  function drawPlayer(){
+    const shielded = shieldTimer>0;
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    const glow = shielded ? 'rgba(62,242,196,0.65)' : 'rgba(139,124,255,0.55)';
+    ctx.shadowColor = glow; ctx.shadowBlur = 18;
+    const bodyColor = shielded ? '#3ef2c4' : '#8b7cff';
+    ctx.fillStyle = bodyColor;
+    const h = player.h, w = player.w;
+    // body capsule
+    roundRect(ctx, 0, 0, w, h, 10);
+    ctx.fill();
+    // visor
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#0a0c18';
+    roundRect(ctx, w*0.55, h*0.18, w*0.32, h*0.28, 4);
+    ctx.fill();
+    // legs animation
+    const legPhase = Math.sin(elapsed*0.02) * (player.onGround && !player.sliding ? 6 : 0);
+    ctx.strokeStyle = bodyColor;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(w*0.3, h); ctx.lineTo(w*0.3+legPhase, h+10);
+    ctx.moveTo(w*0.7, h); ctx.lineTo(w*0.7-legPhase, h+10);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function roundRect(c,x,y,w,h,r){
+    c.beginPath();
+    c.moveTo(x+r,y);
+    c.arcTo(x+w,y,x+w,y+h,r);
+    c.arcTo(x+w,y+h,x,y+h,r);
+    c.arcTo(x,y+h,x,y,r);
+    c.arcTo(x,y,x+w,y,r);
+    c.closePath();
+  }
+
+  function drawObstacles(){
+    obstacles.forEach(o=>{
+      if(o.type==='server'){
+        ctx.fillStyle = '#1c2044';
+        ctx.strokeStyle = 'rgba(255,77,109,0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(o.x,o.y,o.w,o.h);
+        ctx.strokeRect(o.x,o.y,o.w,o.h);
+        ctx.fillStyle = '#ff4d6d';
+        ctx.shadowColor = '#ff4d6d'; ctx.shadowBlur = 8;
+        ctx.beginPath(); ctx.arc(o.x+o.w/2, o.y+8, 3, 0, 7); ctx.fill();
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.fillStyle = 'rgba(255,77,109,0.18)';
+        ctx.strokeStyle = '#ff4d6d';
+        ctx.lineWidth = 2;
+        ctx.fillRect(o.x,o.y,o.w,o.h);
+        ctx.strokeRect(o.x,o.y,o.w,o.h);
+        // diagonal hazard lines
+        ctx.beginPath();
+        for(let i=-o.h;i<o.w;i+=10){
+          ctx.moveTo(o.x+i,o.y+o.h); ctx.lineTo(o.x+i+o.h,o.y);
+        }
+        ctx.strokeStyle='rgba(255,77,109,0.5)'; ctx.lineWidth=1; ctx.stroke();
+      }
+    });
+  }
+
+  function drawCoins(){
+    coins.forEach(c=>{
+      if(c.taken) return;
+      ctx.save();
+      ctx.translate(c.x,c.y);
+      ctx.shadowColor='#f0b90b'; ctx.shadowBlur=10;
+      ctx.fillStyle='#f0b90b';
+      ctx.beginPath(); ctx.arc(0,0,c.r,0,7); ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.fillStyle='#0a0c18';
+      ctx.font='bold 10px Space Grotesk, sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('R',0,1);
+      ctx.restore();
+    });
+  }
+
+  function drawShields(){
+    shields.forEach(s=>{
+      if(s.taken) return;
+      ctx.save();
+      ctx.translate(s.x,s.y);
+      ctx.shadowColor='#3ef2c4'; ctx.shadowBlur=14;
+      ctx.strokeStyle='#3ef2c4'; ctx.lineWidth=2.5;
+      ctx.beginPath();
+      ctx.moveTo(0,-s.r);
+      ctx.quadraticCurveTo(s.r,-s.r*0.6, s.r*0.8, s.r*0.3);
+      ctx.quadraticCurveTo(0, s.r*1.1, 0, s.r*1.1);
+      ctx.quadraticCurveTo(0, s.r*1.1, -s.r*0.8, s.r*0.3);
+      ctx.quadraticCurveTo(-s.r,-s.r*0.6, 0,-s.r);
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+
+  function drawParticles(dt){
+    particles.forEach(p=>{
+      p.x -= speed*dt*0.4; p.life -= dt;
+      ctx.globalAlpha = Math.max(p.life/400,0);
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+    particles = particles.filter(p=>p.life>0);
+  }
+
+  function popText(text,x,y,color){
+    particles.push({x,y,life:1,r:0,color,txt:true});
+    // simple floating text via DOM-less: draw directly next frame set
+    floatTexts.push({text,x,y,color,t:0});
+  }
+  let floatTexts = [];
+  function drawFloatTexts(dt){
+    ctx.font='bold 13px Space Grotesk, sans-serif';
+    ctx.textAlign='center';
+    floatTexts.forEach(f=>{
+      f.t += dt;
+      const alpha = Math.max(1-f.t/500,0);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = f.color;
+      ctx.fillText(f.text, f.x, f.y - f.t*0.05);
+      ctx.globalAlpha = 1;
+    });
+    floatTexts = floatTexts.filter(f=>f.t<500);
+  }
+
+  function updateHud(){
+    tokenValueEl.textContent = tokens;
+    distValueEl.textContent = Math.floor(distance)+'m';
+  }
+
+  let lastTime=null;
+  function loop(ts){
+    if(!lastTime) lastTime=ts;
+    const dt = Math.min(ts-lastTime, 42);
+    lastTime = ts;
+
+    drawBg(dt);
+
+    if(running){
+      elapsed += dt;
+      distance += speed*dt*0.06;
+      speed = Math.min(0.34 + elapsed*0.000012, 0.85);
+      if(shieldTimer>0) shieldTimer -= dt;
+
+      // player physics
+      if(!player.onGround){
+        player.vy += GRAVITY*dt;
+        player.y += player.vy*dt;
+        if(player.y >= groundY-player.h){
+          player.y = groundY-player.h;
+          player.vy = 0;
+          player.onGround = true;
+        }
+      }
+      if(player.sliding){
+        player.h = SLIDE_RUN_H;
+        player.y = groundY - SLIDE_RUN_H;
+        player.slideT -= dt;
+        if(player.slideT<=0){ player.sliding=false; player.h=BASE_RUN_H; player.y=groundY-BASE_RUN_H; }
+      } else if(player.onGround){
+        player.h = BASE_RUN_H;
+      }
+
+      // spawn timers
+      spawnTimerObs -= dt;
+      spawnTimerCoin -= dt;
+      spawnTimerShield -= dt;
+      const minGap = Math.max(650, 1000 - elapsed*0.01);
+      if(spawnTimerObs<=0){ spawnObstacle(); spawnTimerObs = minGap + Math.random()*400; }
+      if(spawnTimerCoin<=0){ spawnCoin(); spawnTimerCoin = 380 + Math.random()*400; }
+      if(spawnTimerShield<=0){ spawnShield(); spawnTimerShield = 14000 + Math.random()*8000; }
+
+      // move & collide obstacles
+      const pRect = { x:player.x+6, y:player.y+4, w:player.w-12, h:player.h-6 };
+      obstacles.forEach(o=>{ o.x -= speed*dt; });
+      obstacles = obstacles.filter(o=>o.x > -60);
+      if(shieldTimer<=0){
+        for(const o of obstacles){
+          if(rectsOverlap(pRect,o)){ gameOver(); break; }
+        }
+      }
+
+      // coins
+      coins.forEach(c=>{
+        c.x -= speed*dt;
+        if(!c.taken){
+          const dx=(player.x+player.w/2)-c.x, dy=(player.y+player.h/2)-c.y;
+          if(Math.sqrt(dx*dx+dy*dy) < c.r+player.w*0.35){
+            c.taken = true; tokens += 5;
+            popText('+5','#f0b90b'.length?c.x:c.x, c.y, '#f0b90b');
+          }
+        }
+      });
+      coins = coins.filter(c=>c.x>-30 && !c.taken || (c.x>-30));
+
+      // shields
+      shields.forEach(s=>{
+        s.x -= speed*dt;
+        if(!s.taken){
+          const dx=(player.x+player.w/2)-s.x, dy=(player.y+player.h/2)-s.y;
+          if(Math.sqrt(dx*dx+dy*dy) < s.r+player.w*0.35){
+            s.taken = true; shieldTimer = 4000;
+            popText('SHIELD','#3ef2c4'.length?s.x:s.x, s.y, '#3ef2c4');
+          }
+        }
+      });
+      shields = shields.filter(s=>s.x>-30 && !s.taken);
+
+      updateHud();
+    }
+
+    drawObstacles();
+    drawCoins();
+    drawShields();
+    drawPlayer();
+    drawFloatTexts(dt);
+
+    requestAnimationFrame(loop);
+  }
+
+  function startGame(){
+    resize();
+    resetState();
+    initBg();
+    startOverlay.classList.add('hidden');
+    overOverlay.classList.add('hidden');
+    running = true;
+    if(isMobile()){ touchHint.classList.remove('hidden'); setTimeout(()=>touchHint.classList.add('hidden'), 2600); }
+  }
+
+  async function gameOver(){
+    running = false;
+    document.getElementById('finalDist').textContent = Math.floor(distance)+'m';
+    document.getElementById('finalTokens').textContent = tokens;
+    let isNew=false;
+    try{
+      const res = await window.storage.get('ritual-runner-best');
+      let prevBest = res ? JSON.parse(res.value) : 0;
+      best = prevBest;
+      if(Math.floor(distance) > best){
+        best = Math.floor(distance);
+        isNew = true;
+        await window.storage.set('ritual-runner-best', JSON.stringify(best));
+      }
+    }catch(e){
+      if(Math.floor(distance) > best){ best = Math.floor(distance); isNew = true; }
+    }
+    document.getElementById('best').textContent = best+'m';
+    document.getElementById('newBestMsg').classList.toggle('hidden', !isNew);
+    overOverlay.classList.remove('hidden');
+  }
+
+  async function loadBest(){
+    try{
+      const res = await window.storage.get('ritual-runner-best');
+      best = res ? JSON.parse(res.value) : 0;
+    }catch(e){ best = 0; }
+    document.getElementById('startBest').textContent = best+'m';
+  }
+
+  startBtn.addEventListener('click', startGame);
+  restartBtn.addEventListener('click', startGame);
+
+  resize();
+  initBg();
+  loadBest();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
